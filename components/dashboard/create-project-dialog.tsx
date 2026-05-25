@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, X } from "lucide-react";
+import { Plus, X, Wand2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { createClient } from "@/lib/supabase/client";
+import type { ListingImportResult } from "@/app/api/import-listing/route";
 
 interface Props {
   designerId: string;
@@ -23,8 +24,44 @@ export function CreateProjectDialog({ designerId }: Props) {
   const [clientEmail, setClientEmail] = useState("");
   const [projectName, setProjectName] = useState("");
   const [notes, setNotes] = useState("");
+  const [listingUrl, setListingUrl] = useState("");
+  const [importLoading, setImportLoading] = useState(false);
+  const [importResult, setImportResult] = useState<ListingImportResult | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
 
   const supabase = createClient();
+
+  function reset() {
+    setClientName("");
+    setClientEmail("");
+    setProjectName("");
+    setNotes("");
+    setListingUrl("");
+    setImportResult(null);
+    setImportError(null);
+    setError(null);
+  }
+
+  async function handleImport() {
+    if (!listingUrl.trim()) return;
+    setImportLoading(true);
+    setImportError(null);
+    setImportResult(null);
+
+    const res = await fetch("/api/import-listing", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: listingUrl }),
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      setImportError(data.error ?? "Failed to import listing.");
+    } else {
+      setImportResult(data);
+    }
+    setImportLoading(false);
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -57,6 +94,7 @@ export function CreateProjectDialog({ designerId }: Props) {
       clientId = newClient.id;
     }
 
+    // Create project
     const { data: project, error: projectError } = await supabase
       .from("projects")
       .insert({
@@ -74,7 +112,36 @@ export function CreateProjectDialog({ designerId }: Props) {
       return;
     }
 
+    // If we have an import result, create rooms and placeholder items
+    if (importResult?.rooms?.length) {
+      for (let i = 0; i < importResult.rooms.length; i++) {
+        const room = importResult.rooms[i];
+        const { data: newRoom } = await supabase
+          .from("rooms")
+          .insert({
+            project_id: project.id,
+            name: room.name,
+            display_order: i,
+          })
+          .select("id")
+          .single();
+
+        if (newRoom && room.categories?.length) {
+          // Create placeholder items for each category
+          const items = room.categories.map((cat) => ({
+            room_id: newRoom.id,
+            category: mapCategory(cat),
+            name: cat,
+            product_url: "https://placeholder.com",
+            designer_note: "To be sourced",
+          }));
+          await supabase.from("items").insert(items);
+        }
+      }
+    }
+
     setOpen(false);
+    reset();
     router.push(`/dashboard/projects/${project.id}`);
     router.refresh();
   }
@@ -89,16 +156,17 @@ export function CreateProjectDialog({ designerId }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-card rounded-xl shadow-xl w-full max-w-md mx-4 p-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 overflow-y-auto py-8">
+      <div className="bg-card rounded-xl shadow-xl w-full max-w-lg mx-4 p-6">
         <div className="flex items-center justify-between mb-5">
           <h2 className="font-serif text-xl font-semibold">New project</h2>
-          <button onClick={() => setOpen(false)} className="text-muted-foreground hover:text-foreground">
+          <button onClick={() => { setOpen(false); reset(); }} className="text-muted-foreground hover:text-foreground">
             <X className="h-5 w-5" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Project name */}
           <div className="space-y-2">
             <Label htmlFor="project-name">Project name</Label>
             <Input
@@ -111,6 +179,7 @@ export function CreateProjectDialog({ designerId }: Props) {
             />
           </div>
 
+          {/* Client */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label htmlFor="client-name">Client name</Label>
@@ -135,21 +204,82 @@ export function CreateProjectDialog({ designerId }: Props) {
             </div>
           </div>
 
+          {/* Listing URL — optional */}
           <div className="space-y-2">
-            <Label htmlFor="notes">Notes (optional)</Label>
+            <Label htmlFor="listing-url">
+              Property listing URL{" "}
+              <span className="text-muted-foreground font-normal">(optional)</span>
+            </Label>
+            <div className="flex gap-2">
+              <Input
+                id="listing-url"
+                type="url"
+                placeholder="Zillow, Redfin, Realtor.com link..."
+                value={listingUrl}
+                onChange={(e) => {
+                  setListingUrl(e.target.value);
+                  setImportResult(null);
+                  setImportError(null);
+                }}
+                className="flex-1"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleImport}
+                disabled={importLoading || !listingUrl.trim()}
+              >
+                {importLoading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Wand2 className="h-3.5 w-3.5" />
+                )}
+                {importLoading ? "Analyzing..." : "Import"}
+              </Button>
+            </div>
+            {importError && (
+              <p className="text-xs text-amber-700 bg-amber-50 rounded px-2 py-1">{importError}</p>
+            )}
+          </div>
+
+          {/* Import result preview */}
+          {importResult && (
+            <div className="rounded-lg border bg-secondary/40 p-4 space-y-3">
+              <p className="text-xs text-muted-foreground italic">{importResult.propertyDescription}</p>
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Proposed rooms & sourcing categories
+                </p>
+                {importResult.rooms.map((room, i) => (
+                  <div key={i} className="text-sm">
+                    <span className="font-medium">{room.name}</span>
+                    <span className="text-muted-foreground"> — {room.categories.join(", ")}</span>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                These rooms and placeholder items will be created. You&apos;ll fill in the actual product URLs.
+              </p>
+            </div>
+          )}
+
+          {/* Notes */}
+          <div className="space-y-2">
+            <Label htmlFor="notes">Notes <span className="text-muted-foreground font-normal">(optional)</span></Label>
             <Textarea
               id="notes"
-              placeholder="Project scope, special considerations..."
+              placeholder="Project scope, style direction, budget..."
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              rows={3}
+              rows={2}
             />
           </div>
 
           {error && <p className="text-sm text-red-600">{error}</p>}
 
           <div className="flex gap-3 justify-end pt-1">
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+            <Button type="button" variant="outline" onClick={() => { setOpen(false); reset(); }}>
               Cancel
             </Button>
             <Button type="submit" disabled={loading}>
@@ -160,4 +290,13 @@ export function CreateProjectDialog({ designerId }: Props) {
       </div>
     </div>
   );
+}
+
+function mapCategory(cat: string): string {
+  const lower = cat.toLowerCase();
+  if (lower.includes("wall") || lower.includes("paint") || lower.includes("wallpaper")) return "wall_finish";
+  if (lower.includes("light") || lower.includes("lamp") || lower.includes("fixture") || lower.includes("sconce")) return "fixture";
+  if (lower.includes("rug") || lower.includes("curtain") || lower.includes("drape") || lower.includes("pillow") || lower.includes("throw")) return "textile";
+  if (lower.includes("art") || lower.includes("mirror") || lower.includes("plant") || lower.includes("vase") || lower.includes("decor")) return "accessory";
+  return "furniture";
 }
