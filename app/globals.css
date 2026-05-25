@@ -1,0 +1,45 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Ann Merideth Design brand tokens */
+    --brand-primary: #1C1C1A;
+    --brand-secondary: #F8F6F2;
+    --brand-accent: #B8A898;
+    --brand-muted: #9C9189;
+
+    /* Design tokens — warm neutral palette */
+    --background: 40 20% 97%;       /* warm off-white */
+    --foreground: 30 5% 11%;        /* near-black warm */
+    --card: 0 0% 100%;
+    --card-foreground: 30 5% 11%;
+    --primary: 30 5% 11%;           /* near-black */
+    --primary-foreground: 40 20% 97%;
+    --secondary: 35 18% 93%;        /* warm light gray */
+    --secondary-foreground: 30 5% 11%;
+    --muted: 35 15% 90%;
+    --muted-foreground: 30 6% 46%;
+    --accent: 30 18% 67%;           /* warm taupe */
+    --accent-foreground: 30 5% 11%;
+    --border: 35 14% 87%;
+    --input: 35 14% 87%;
+    --ring: 30 5% 11%;
+    --radius: 0.25rem;              /* minimal corner radius */
+
+    /* Typography — Cormorant Garamond for elegant serif headings, Jost for clean body */
+    --font-sans: "Jost", system-ui, sans-serif;
+    --font-serif: "Cormorant Garamond", Georgia, serif;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
