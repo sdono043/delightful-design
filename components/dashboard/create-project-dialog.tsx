@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, X, Wand2, Loader2 } from "lucide-react";
+import { Plus, X, Wand2, Loader2, ImagePlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,6 +30,8 @@ export function CreateProjectDialog({ designerId }: Props) {
   const [importLoading, setImportLoading] = useState(false);
   const [importResult, setImportResult] = useState<ListingImportResult | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
+  const [images, setImages] = useState<string[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const supabase = createClient();
 
@@ -44,6 +46,21 @@ export function CreateProjectDialog({ designerId }: Props) {
     setImportResult(null);
     setImportError(null);
     setError(null);
+    setImages([]);
+  }
+
+  async function handleImageFiles(files: FileList | null) {
+    if (!files?.length) return;
+    const toBase64 = (file: File): Promise<string> =>
+      new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    const encoded = await Promise.all(Array.from(files).map(toBase64));
+    setImages((prev) => [...prev, ...encoded].slice(0, 5));
+    setImportResult(null);
   }
 
   async function handleImport(useText = false) {
@@ -55,8 +72,8 @@ export function CreateProjectDialog({ designerId }: Props) {
     setImportResult(null);
 
     const body = useText
-      ? { text: listingText }
-      : { url: listingUrl };
+      ? { text: listingText, notes: notes || undefined, images: images.length ? images : undefined }
+      : { url: listingUrl, notes: notes || undefined, images: images.length ? images : undefined };
 
     const res = await fetch("/api/import-listing", {
       method: "POST",
@@ -304,6 +321,45 @@ export function CreateProjectDialog({ designerId }: Props) {
                 </div>
               </div>
             )}
+
+            {/* Room photo uploads */}
+            <div className="space-y-1.5">
+              <p className="text-xs text-muted-foreground">
+                Upload room photos <span className="font-normal">(optional — helps Claude suggest specific quantities)</span>
+              </p>
+              <div className="flex flex-wrap gap-2 items-center">
+                {images.map((src, i) => (
+                  <div key={i} className="relative h-14 w-14 rounded overflow-hidden border">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={src} alt="" className="h-full w-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => setImages((prev) => prev.filter((_, idx) => idx !== i))}
+                      className="absolute top-0 right-0 bg-black/60 text-white rounded-bl p-0.5"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+                {images.length < 5 && (
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="h-14 w-14 rounded border border-dashed flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-foreground transition-colors"
+                  >
+                    <ImagePlus className="h-5 w-5" />
+                  </button>
+                )}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => handleImageFiles(e.target.files)}
+                />
+              </div>
+            </div>
 
             {importError && (
               <p className="text-xs text-red-600">{importError}</p>

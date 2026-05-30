@@ -16,8 +16,18 @@ export interface ListingImportResult {
   rooms: ProposedRoom[];
 }
 
-const CLAUDE_PROMPT = (content: string) => `You are an expert residential interior designer. Analyze this real estate listing and propose a room-by-room sourcing list.
+const CLAUDE_PROMPT = (content: string, notes?: string, imageBase64?: string[]) => {
+  const notesSection = notes?.trim()
+    ? `\nDesigner notes / project context (use these to tailor specificity, quantities, and style):
+${notes}\n`
+    : "";
 
+  const imageSection = imageBase64?.length
+    ? `\n${imageBase64.length} room photo(s) have been provided. Analyze them to determine furniture layout, room scale, natural light, and specific quantity needs (e.g. "2 accent chairs", "3-seat sofa", "pair of bedside tables").\n`
+    : "";
+
+  return `You are an expert residential interior designer. Analyze this real estate listing and propose a detailed room-by-room sourcing list.
+${notesSection}${imageSection}
 Listing content:
 ${content}
 
@@ -27,17 +37,20 @@ Respond with valid JSON only, no markdown, in this exact format:
   "rooms": [
     {
       "name": "Room Name",
-      "categories": ["category 1", "category 2", "category 3"]
+      "categories": ["specific item 1", "specific item 2", "specific item 3"]
     }
   ]
 }
 
 Rules:
 - Only include rooms that are clearly mentioned or strongly implied by the listing
-- For each room, list 3-6 sourcing categories (specific item types a designer would source, e.g. "Sofa", "Coffee Table", "Area Rug", "Floor Lamp", "Accent Chairs", "Side Tables")
+- Be SPECIFIC with quantities and types — say "3-Seat Sofa" not "Sofa", "2 Accent Chairs" not "Seating", "Pair of Nightstands" not "Nightstands", "6-8 Person Dining Table" based on room size
+- If designer notes mention a budget, tailor the item specificity accordingly (e.g. higher budget = more bespoke items like "Custom Upholstered Headboard")
+- If designer notes mention a style, reflect it (e.g. "modern organic" → "Curved Bouclé Sofa" instead of generic "Sofa")
+- List 4-7 sourcing items per room
 - Use standard interior design terminology
-- Common rooms: Living Room, Primary Bedroom, Dining Room, Kitchen, Home Office, Guest Bedroom, Primary Bathroom, Mudroom/Entry
 - Do not invent rooms not supported by the listing`;
+};
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
@@ -46,11 +59,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { url, text: pastedText } = await request.json();
+  const { url, text: pastedText, notes, images } = await request.json();
 
   // If pasted text is provided, use it directly
   if (pastedText?.trim()) {
-    return await analyzeWithClaude(pastedText.trim());
+    return await analyzeWithClaude(pastedText.trim(), notes, images);
   }
 
   if (!url) {
@@ -75,30 +88,57 @@ export async function POST(request: NextRequest) {
       .trim()
       .slice(0, 8000);
   } catch {
-    // Signal to the client that scraping failed so they can show the paste fallback
     return NextResponse.json({ error: "scrape_failed" }, { status: 422 });
   }
 
-  // Check if we got meaningful content (Zillow/Redfin often return JS-only pages)
   if (text.length < 500) {
     return NextResponse.json({ error: "scrape_failed" }, { status: 422 });
   }
 
-  return await analyzeWithClaude(text);
+  return await analyzeWithClaude(text, notes, images);
 }
 
-async function analyzeWithClaude(content: string): Promise<NextResponse> {
+async function analyzeWithClaude(
+  content: string,
+  notes?: string,
+  imageBase64?: string[]
+): Promise<NextResponse> {
+  const promptText = CLAUDE_PROMPT(content, notes, imageBase64);
+
+  // Build message content — text + optional images
+  type ContentBlock =
+    | { type: "text"; text: string }
+    | { type: "image"; source: { type: "base64"; media_type: "image/jpeg" | "image/png" | "image/gif" | "image/webp"; data: string } };
+
+  const messageContent: ContentBlock[] = [{ type: "text", text: promptText }];
+
+  if (imageBase64?.length) {
+    for (const img of imageBase64) {
+      // img format: "data:image/jpeg;base64,<data>"
+      const match = img.match(/^data:(image\/\w+);base64,(.+)$/);
+      if (match) {
+        messageContent.push({
+          type: "image",
+          source: {
+            type: "base64",
+            media_type: match[1] as "image/jpeg" | "image/png" | "image/gif" | "image/webp",
+            data: match[2],
+          },
+        });
+      }
+    }
+  }
+
   const message = await anthropic.messages.create({
-    model: "claude-haiku-4-5-20251001",
+    model: imageBase64?.length ? "claude-sonnet-4-6" : "claude-haiku-4-5-20251001",
     max_tokens: 1024,
-    messages: [{ role: "user", content: CLAUDE_PROMPT(content) }],
+    messages: [{ role: "user", content: messageContent }],
   });
 
   const raw = message.content[0].type === "text" ? message.content[0].text : "";
 
   let result: ListingImportResult;
   try {
-    // Extract JSON even if Claude wrapped it in markdown code blocks
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error("No JSON found");
     result = JSON.parse(jsonMatch[0]);
