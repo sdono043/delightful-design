@@ -6,6 +6,7 @@ import { formatDate } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { ProjectActions } from "@/components/dashboard/project-actions";
 import { RoomManager } from "@/components/dashboard/room-manager";
+import { EditProjectNotes } from "@/components/dashboard/edit-project-notes";
 import type { ProjectStatus } from "@/lib/types";
 
 interface Props {
@@ -81,9 +82,7 @@ export default async function ProjectPage({ params }: Props) {
           <p className="text-sm text-muted-foreground">
             {client.name} &middot; {client.email} &middot; Created {formatDate(project.created_at)}
           </p>
-          {project.notes && (
-            <p className="text-sm text-muted-foreground mt-1 italic">{project.notes}</p>
-          )}
+          <EditProjectNotes projectId={id} notes={project.notes} />
         </div>
 
         <ProjectActions

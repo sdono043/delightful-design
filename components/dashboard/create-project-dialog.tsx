@@ -238,6 +238,18 @@ export function CreateProjectDialog({ designerId }: Props) {
             </div>
           </div>
 
+          {/* Notes — placed before listing import so Claude can use them */}
+          <div className="space-y-2">
+            <Label htmlFor="notes">Notes <span className="text-muted-foreground font-normal">(optional)</span></Label>
+            <Textarea
+              id="notes"
+              placeholder="Style direction, budget, scope — Claude uses these to tailor the room list..."
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={2}
+            />
+          </div>
+
           {/* Listing import — optional */}
           <div className="space-y-2">
             <Label>
@@ -386,18 +398,6 @@ export function CreateProjectDialog({ designerId }: Props) {
               </p>
             </div>
           )}
-
-          {/* Notes */}
-          <div className="space-y-2">
-            <Label htmlFor="notes">Notes <span className="text-muted-foreground font-normal">(optional)</span></Label>
-            <Textarea
-              id="notes"
-              placeholder="Project scope, style direction, budget..."
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={2}
-            />
-          </div>
 
           {error && <p className="text-sm text-red-600">{error}</p>}
 
