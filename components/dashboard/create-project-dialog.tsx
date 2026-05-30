@@ -25,6 +25,8 @@ export function CreateProjectDialog({ designerId }: Props) {
   const [projectName, setProjectName] = useState("");
   const [notes, setNotes] = useState("");
   const [listingUrl, setListingUrl] = useState("");
+  const [listingText, setListingText] = useState("");
+  const [showPasteFallback, setShowPasteFallback] = useState(false);
   const [importLoading, setImportLoading] = useState(false);
   const [importResult, setImportResult] = useState<ListingImportResult | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
@@ -37,28 +39,44 @@ export function CreateProjectDialog({ designerId }: Props) {
     setProjectName("");
     setNotes("");
     setListingUrl("");
+    setListingText("");
+    setShowPasteFallback(false);
     setImportResult(null);
     setImportError(null);
     setError(null);
   }
 
-  async function handleImport() {
-    if (!listingUrl.trim()) return;
+  async function handleImport(useText = false) {
+    if (!useText && !listingUrl.trim()) return;
+    if (useText && !listingText.trim()) return;
+
     setImportLoading(true);
     setImportError(null);
     setImportResult(null);
 
+    const body = useText
+      ? { text: listingText }
+      : { url: listingUrl };
+
     const res = await fetch("/api/import-listing", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url: listingUrl }),
+      body: JSON.stringify(body),
     });
 
     const data = await res.json();
+
     if (!res.ok) {
-      setImportError(data.error ?? "Failed to import listing.");
+      if (data.error === "scrape_failed") {
+        // Zillow/Redfin blocked scraping — show paste fallback
+        setShowPasteFallback(true);
+        setImportError(null);
+      } else {
+        setImportError(data.error ?? "Failed to import listing.");
+      }
     } else {
       setImportResult(data);
+      setShowPasteFallback(false);
     }
     setImportLoading(false);
   }
@@ -127,7 +145,6 @@ export function CreateProjectDialog({ designerId }: Props) {
           .single();
 
         if (newRoom && room.categories?.length) {
-          // Create placeholder items for each category
           const items = room.categories.map((cat) => ({
             room_id: newRoom.id,
             category: mapCategory(cat),
@@ -204,42 +221,92 @@ export function CreateProjectDialog({ designerId }: Props) {
             </div>
           </div>
 
-          {/* Listing URL — optional */}
+          {/* Listing import — optional */}
           <div className="space-y-2">
-            <Label htmlFor="listing-url">
-              Property listing URL{" "}
-              <span className="text-muted-foreground font-normal">(optional)</span>
+            <Label>
+              Property listing{" "}
+              <span className="text-muted-foreground font-normal">(optional — auto-generates rooms)</span>
             </Label>
-            <div className="flex gap-2">
-              <Input
-                id="listing-url"
-                type="url"
-                placeholder="Zillow, Redfin, Realtor.com link..."
-                value={listingUrl}
-                onChange={(e) => {
-                  setListingUrl(e.target.value);
-                  setImportResult(null);
-                  setImportError(null);
-                }}
-                className="flex-1"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleImport}
-                disabled={importLoading || !listingUrl.trim()}
-              >
-                {importLoading ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Wand2 className="h-3.5 w-3.5" />
-                )}
-                {importLoading ? "Analyzing..." : "Import"}
-              </Button>
-            </div>
+
+            {!showPasteFallback ? (
+              <div className="space-y-2">
+                <div className="flex gap-2">
+                  <Input
+                    type="url"
+                    placeholder="Zillow, Redfin, Realtor.com link..."
+                    value={listingUrl}
+                    onChange={(e) => {
+                      setListingUrl(e.target.value);
+                      setImportResult(null);
+                      setImportError(null);
+                    }}
+                    className="flex-1"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleImport(false)}
+                    disabled={importLoading || !listingUrl.trim()}
+                  >
+                    {importLoading ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Wand2 className="h-3.5 w-3.5" />
+                    )}
+                    {importLoading ? "Analyzing..." : "Import"}
+                  </Button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowPasteFallback(true)}
+                  className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
+                >
+                  Or paste listing description instead
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-xs text-amber-700 bg-amber-50 rounded px-3 py-2">
+                  This listing site blocks automated access. Copy the property description from the listing page and paste it below.
+                </p>
+                <Textarea
+                  placeholder="Paste the full listing description here — include bed/bath count, room names, square footage, etc."
+                  value={listingText}
+                  onChange={(e) => {
+                    setListingText(e.target.value);
+                    setImportResult(null);
+                  }}
+                  rows={5}
+                />
+                <div className="flex items-center gap-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleImport(true)}
+                    disabled={importLoading || !listingText.trim()}
+                  >
+                    {importLoading ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Wand2 className="h-3.5 w-3.5" />
+                    )}
+                    {importLoading ? "Analyzing..." : "Generate rooms"}
+                  </Button>
+                  <button
+                    type="button"
+                    onClick={() => { setShowPasteFallback(false); setListingText(""); setImportResult(null); }}
+                    className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
+                  >
+                    Use URL instead
+                  </button>
+                </div>
+              </div>
+            )}
+
             {importError && (
-              <p className="text-xs text-amber-700 bg-amber-50 rounded px-2 py-1">{importError}</p>
+              <p className="text-xs text-red-600">{importError}</p>
             )}
           </div>
 
