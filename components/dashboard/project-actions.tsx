@@ -22,7 +22,18 @@ export function ProjectActions({ projectId, status, clientEmail, unsourcedCount,
   const router = useRouter();
   const [sending, setSending] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [completing, setCompleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  async function handleMarkComplete() {
+    if (!confirm("Mark this project as complete?")) return;
+    setCompleting(true);
+    const { createClient } = await import("@/lib/supabase/client");
+    const supabase = createClient();
+    await supabase.from("projects").update({ status: "complete" }).eq("id", projectId);
+    setCompleting(false);
+    router.refresh();
+  }
 
   async function handleSend() {
     if (
@@ -63,13 +74,19 @@ export function ProjectActions({ projectId, status, clientEmail, unsourcedCount,
     <div className="flex items-center gap-2 flex-wrap justify-end">
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      {token?.submitted_at && (
+      {(status === "submitted" || status === "complete") && (
         <Link href={`/dashboard/projects/${projectId}/purchase-list`}>
           <Button variant="default">
             <ShoppingCart className="h-4 w-4" />
             Purchase list
           </Button>
         </Link>
+      )}
+
+      {status === "submitted" && (
+        <Button variant="outline" size="sm" onClick={handleMarkComplete} disabled={completing}>
+          {completing ? "Saving..." : "Mark complete"}
+        </Button>
       )}
 
       {token && (

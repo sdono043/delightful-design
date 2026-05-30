@@ -20,7 +20,7 @@ export default async function ProjectsPage() {
 
   const { data: projects } = await supabase
     .from("projects")
-    .select("*, clients(name, email)")
+    .select("*, clients(name, email), rooms(id)")
     .eq("designer_id", designer!.id)
     .order("updated_at", { ascending: false });
 
@@ -62,7 +62,11 @@ export default async function ProjectsPage() {
                       </Badge>
                     </div>
                     <p className="text-sm text-muted-foreground mt-0.5">
-                      {(project.clients as { name: string }).name} &middot; Updated {formatDate(project.updated_at)}
+                      {(project.clients as { name: string }).name}
+                      {" · "}
+                      {(project.rooms as { id: string }[])?.length ?? 0} room{((project.rooms as { id: string }[])?.length ?? 0) !== 1 ? "s" : ""}
+                      {" · "}
+                      Updated {formatDate(project.updated_at)}
                     </p>
                   </div>
                   <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />

@@ -1,5 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { ProjectActions } from "@/components/dashboard/project-actions";
@@ -61,6 +63,14 @@ export default async function ProjectPage({ params }: Props) {
 
   return (
     <div>
+      <Link
+        href="/dashboard/projects"
+        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-5"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        All projects
+      </Link>
+
       {/* Header */}
       <div className="flex items-start justify-between mb-6">
         <div>

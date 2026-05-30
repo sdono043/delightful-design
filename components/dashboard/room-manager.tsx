@@ -49,6 +49,8 @@ export function RoomManager({ projectId, projectNotes, rooms: initialRooms }: Pr
   const [newRoomName, setNewRoomName] = useState("");
   const [addingRoom, setAddingRoom] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [renamingRoomId, setRenamingRoomId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
   const [expandedRooms, setExpandedRooms] = useState<Set<string>>(
     () => new Set(initialRooms.map((r) => r.id))
   );
@@ -167,6 +169,13 @@ export function RoomManager({ projectId, projectNotes, rooms: initialRooms }: Pr
     router.refresh();
   }
 
+  async function handleRenameRoom(roomId: string) {
+    if (!renameValue.trim()) { setRenamingRoomId(null); return; }
+    await supabase.from("rooms").update({ name: renameValue.trim() }).eq("id", roomId);
+    setRenamingRoomId(null);
+    router.refresh();
+  }
+
   async function handleDeleteRoom(roomId: string) {
     if (!confirm("Delete this room and all its items?")) return;
     await supabase.from("rooms").delete().eq("id", roomId);
@@ -200,20 +209,45 @@ export function RoomManager({ projectId, projectNotes, rooms: initialRooms }: Pr
           <Card key={room.id}>
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
-                <button
-                  onClick={() => toggleRoom(room.id)}
-                  className="flex items-center gap-2 text-left hover:opacity-80"
-                >
-                  <CardTitle className="text-base">{room.name}</CardTitle>
-                  <span className="text-xs text-muted-foreground">
-                    {room.items.length} item{room.items.length !== 1 ? "s" : ""}
-                  </span>
-                  {expandedRooms.has(room.id) ? (
-                    <ChevronUp className="h-4 w-4 text-muted-foreground" />
-                  ) : (
-                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                  )}
-                </button>
+                {renamingRoomId === room.id ? (
+                  <form
+                    className="flex items-center gap-2 flex-1 mr-2"
+                    onSubmit={(e) => { e.preventDefault(); handleRenameRoom(room.id); }}
+                  >
+                    <Input
+                      autoFocus
+                      value={renameValue}
+                      onChange={(e) => setRenameValue(e.target.value)}
+                      className="h-7 text-sm font-medium"
+                      onBlur={() => handleRenameRoom(room.id)}
+                      onKeyDown={(e) => e.key === "Escape" && setRenamingRoomId(null)}
+                    />
+                  </form>
+                ) : (
+                  <button
+                    onClick={() => toggleRoom(room.id)}
+                    className="flex items-center gap-2 text-left hover:opacity-80"
+                  >
+                    <CardTitle
+                      className="text-base cursor-text"
+                      onDoubleClick={(e) => {
+                        e.stopPropagation();
+                        setRenamingRoomId(room.id);
+                        setRenameValue(room.name);
+                      }}
+                    >
+                      {room.name}
+                    </CardTitle>
+                    <span className="text-xs text-muted-foreground">
+                      {room.items.length} item{room.items.length !== 1 ? "s" : ""}
+                    </span>
+                    {expandedRooms.has(room.id) ? (
+                      <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                    )}
+                  </button>
+                )}
                 <div className="flex items-center gap-2">
                   <Button
                     variant="outline"
