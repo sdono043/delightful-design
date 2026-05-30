@@ -98,7 +98,10 @@ async function analyzeWithClaude(content: string): Promise<NextResponse> {
 
   let result: ListingImportResult;
   try {
-    result = JSON.parse(raw);
+    // Extract JSON even if Claude wrapped it in markdown code blocks
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error("No JSON found");
+    result = JSON.parse(jsonMatch[0]);
   } catch {
     return NextResponse.json({ error: "Could not parse listing data." }, { status: 422 });
   }
