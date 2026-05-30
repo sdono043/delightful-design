@@ -54,6 +54,11 @@ export default async function ProjectPage({ params }: Props) {
   const client = project.clients as { name: string; email: string };
   const status = project.status as ProjectStatus;
 
+  const allItems = (rooms ?? []).flatMap((r) => r.items ?? []);
+  const totalItems = allItems.length;
+  const sourcedItems = allItems.filter((i) => i.product_url !== "https://placeholder.com").length;
+  const unsourcedCount = totalItems - sourcedItems;
+
   return (
     <div>
       {/* Header */}
@@ -76,8 +81,27 @@ export default async function ProjectPage({ params }: Props) {
           status={status}
           clientEmail={client.email}
           token={token}
+          unsourcedCount={unsourcedCount}
         />
       </div>
+
+      {/* Sourcing progress */}
+      {totalItems > 0 && (
+        <div className="mb-4 flex items-center gap-3 text-sm">
+          <div className="flex-1 bg-secondary rounded-full h-1.5 overflow-hidden">
+            <div
+              className="bg-primary h-1.5 rounded-full transition-all"
+              style={{ width: `${totalItems > 0 ? (sourcedItems / totalItems) * 100 : 0}%` }}
+            />
+          </div>
+          <span className="text-muted-foreground shrink-0">
+            {sourcedItems}/{totalItems} items sourced
+            {unsourcedCount > 0 && (
+              <span className="text-amber-700 ml-1">· {unsourcedCount} need sourcing</span>
+            )}
+          </span>
+        </div>
+      )}
 
       {/* Token status bar */}
       {token && (

@@ -66,13 +66,21 @@ export default async function PortalPage({ params }: Props) {
 
   const alreadySubmitted = !!tokenRow.submitted_at;
 
+  // Filter out placeholder (unsourced) items — clients should only see fully sourced items
+  const filteredRooms = (rooms ?? [])
+    .map((r) => ({
+      ...r,
+      items: (r.items ?? []).filter((item: { product_url: string }) => item.product_url !== "https://placeholder.com"),
+    }))
+    .filter((r) => r.items.length > 0);
+
   return (
     <PortalClient
       tokenId={tokenRow.id}
       projectId={project.id}
       projectName={project.name}
       clientName={project.clients.name}
-      rooms={(rooms ?? []).map((r) => ({ ...r, items: r.items ?? [] }))}
+      rooms={filteredRooms}
       existingSelections={existingSelections ?? []}
       alreadySubmitted={alreadySubmitted}
     />

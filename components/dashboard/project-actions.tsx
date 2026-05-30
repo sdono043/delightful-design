@@ -11,19 +11,28 @@ interface Props {
   projectId: string;
   status: ProjectStatus;
   clientEmail: string;
+  unsourcedCount: number;
   token: {
     token: string;
     submitted_at: string | null;
   } | null;
 }
 
-export function ProjectActions({ projectId, status, clientEmail, token }: Props) {
+export function ProjectActions({ projectId, status, clientEmail, unsourcedCount, token }: Props) {
   const router = useRouter();
   const [sending, setSending] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function handleSend() {
+    if (
+      unsourcedCount > 0 &&
+      !confirm(
+        `${unsourcedCount} item${unsourcedCount !== 1 ? "s" : ""} still need sourcing and won't appear in the client portal. Send anyway?`
+      )
+    ) {
+      return;
+    }
     setSending(true);
     setError(null);
 
