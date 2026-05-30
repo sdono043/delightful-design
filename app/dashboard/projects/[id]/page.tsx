@@ -108,6 +108,7 @@ export default async function ProjectPage({ params }: Props) {
       {/* Rooms and items */}
       <RoomManager
         projectId={id}
+        projectNotes={project.notes}
         rooms={(rooms ?? []).map((r) => ({
           ...r,
           items: r.items ?? [],
